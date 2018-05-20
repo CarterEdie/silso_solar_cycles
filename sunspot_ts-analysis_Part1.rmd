@@ -15,17 +15,27 @@ knitr::opts_chunk$set(
 ```
 
 GitHub: https://github.com/CarterEdie
+
 LinkedIn: https://www.linkedin.com/in/i-carter-edie/
 
 ## Introduction
 
 The purpose of this three part case study is to use exploratory, descriptive, and predictive statistical techniques to examine a well know time series that has over 200 years of continuous recorded events.
 
-"Sunspots are temporary phenomena on the Sun's photosphere that appear as spots darker than the surrounding areas. They are regions of reduced surface temperature caused by concentrations of magnetic field flux that inhibit convection. Sunspots usually appear in pairs of opposite magnetic polarity.[2] Their number varies according to the approximately 11-year solar cycle. Individual sunspots or groups of sunspots may last anywhere from a few days to a few months, but eventually decay."                                                                         - Wikipedia (https://en.wikipedia.org/wiki/Sunspot)
+"Sunspots are temporary phenomena on the Sun's photosphere that appear as spots darker than the surrounding areas. They are regions of reduced surface temperature caused by concentrations of magnetic field flux that inhibit convection. Sunspots usually appear in pairs of opposite magnetic polarity. Their number varies according to the approximately 11-year solar cycle. Individual sunspots or groups of sunspots may last anywhere from a few days to a few months, but eventually decay."                                                                         - Wikipedia (https://en.wikipedia.org/wiki/Sunspot)
+
+```{r Sunspot Animation, echo=FALSE, fig.cap="A Massive Sunspot Traversing the Solar Disc https://www.wired.com/2014/02/sunspot-active-jupiter/"}
+knitr::include_graphics("sunspot1.gif")
+#https://www.wired.com/2014/02/sunspot-active-jupiter/
+```
+
+Data description:
+
+"Daily total sunspot number derived by the formula: R= Ns + 10 * Ng, with Ns the number of spots and Ng the number of groups counted over the entire solar disk."
 
 First, we need to load the basic packages required to read [readxl] and manipulate [tidyverse] the data along with the time series analysis package [zoo].
 
-```{r Library Loading, warning=FALSE}
+```{r Library Loading, warning=FALSE, echo=FALSE}
 library(readxl)
 library(tidyverse)
 library(zoo)
@@ -46,7 +56,7 @@ Data versions availible at SILSO are:
 
 The CVS version is downloaded directly onto the client computer (Daily total sunspot number) and for this project we will use a modified version of Daily total sunspot number manipulated in Excel (SN_d_tot_V2.0-edit.csv).
 
-```{r Import Data, message=FALSE, warning=FALSE}
+```{r Import Data, message=FALSE, warning=FALSE, out.width = '100%', echo=FALSE}
 #This data.frame has been adjusted before import in Excel to identify cycle number value and create cycldays
 silso_ss <- read_csv("SN_d_tot_V2.0-edit.csv", na = "")
 summary(silso_ss)
@@ -56,7 +66,7 @@ summary(silso_ss)
 
 Need to set 'cyclnum' as a factor, create a cumulative summation of sunspot numbers, then add it back as a column into the silso_ss data.frame. We will be plotting this variable later as cumulative summation of the sunspot number can be used as a proxi for total solar activity.
 
-```{r Data Manipulation, message=FALSE, warning=FALSE}
+```{r Data Manipulation, message=FALSE, warning=FALSE, echo=FALSE}
 #data.frame manipulation using dplyr
 silso_ss$cyclnum <- as.factor(silso_ss$cyclnum)
 print(levels((silso_ss$cyclnum)))
@@ -69,7 +79,7 @@ silso_ss$csum <- silso_ss_csum$csum
 
 Next, we can create a new data.frame called 'cycle_stats' using dplyr and summeraize again to find 'cycLength', 'middle', and maximum values for ssnum and total cumulative sunspots per cycle, interactively viewing cycle_stats with the [DT] package.
 
-```{r Summary data.frame, message=FALSE, warning=FALSE}
+```{r Summary data.frame, message=FALSE, warning=FALSE, echo=FALSE}
 #data.frame creation using dplyr, group_by, and summarize
 cycle_stats <- silso_ss %>%
   group_by(cyclnum) %>%
@@ -81,12 +91,13 @@ cycle_stats <- silso_ss %>%
     cumssnum = max(csum))
 datatable(cycle_stats)
 #worthwhile to glimse at the average cycle length as well (in days)
-mean(cycle_stats$cycLength_d)
+summary(cycle_stats)
 ```
+
 
 Now we can calculate different rolling averages using the "zoo" package. NA values are excluded from the calculations by coding 'fill = NA' and 'align = c("right")' ensures averaging of backwards looking time values. 'dmavg90' represents the short frequency (~3 months) and 'dmavg360' is for the longer-frequency (~1 year), viewing the complete silso_ss data.frame interactively using the [DT] package.
 
-```{r Mutate 90-day and 360-day Moving Averages, message=FALSE, warning=FALSE}
+```{r Mutate 90-day and 360-day Moving Averages, message=FALSE, warning=FALSE, echo=FALSE}
 #data.frame mutation with dplyr and zoo for rolling averages
 silso_ss <- mutate(silso_ss, dmavg90 = rollapply(ssnum, 90, mean, fill = NA, na.rm = TRUE,
                                                 align = c("right")))
@@ -95,13 +106,14 @@ silso_ss <- mutate(silso_ss, dmavg360 = rollapply(ssnum, 360, mean, fill = NA, n
 datatable(silso_ss)
 ```
 
+
 The two data.frames that have been created and manipulated [silso_ss and cycle_stats] are now ready to be investigated through plotting.
 
 ## Exploratory Analysis Plotting
 
 Let's plot some exploratory data images. First will be a full timeseries plot with the 360-Day moving average overlay, the second will show the length of each individual solar cycle, and the last two are maximum and cummulative sunspot comparisons per solar cycle.
 
-```{r Timeseries Plots, message=FALSE, warning=FALSE}
+```{r Timeseries Plots, message=FALSE, warning=FALSE, out.width = '100%', echo=FALSE}
 #Plot the sunspot number, 360-day moving average, cycle number, and complete data GAM trend
 ggplot(data = filter(silso_ss, year >= "1818"), mapping = aes(x = foydate, y = ssnum)) + 
   geom_line(colour = 'slategray1', na.rm = TRUE) +
@@ -109,10 +121,10 @@ ggplot(data = filter(silso_ss, year >= "1818"), mapping = aes(x = foydate, y = s
             na.rm = TRUE) +  
   geom_smooth(colour = "#2171B5") +  
   theme_light() + 
-  ggtitle("SOLAR CYCLE ACTIVITY") +
+  ggtitle("SOLAR CYCLE ACTIVITY (1818-2018)") +
   labs(x = "YEAR", y = "SUNSPOT NUMBER") +
-  theme(plot.title = element_text(colour="#666666", face="bold", size=18, hjust=0)) +
-  theme(axis.title = element_text(colour="#666666", face="bold", size=12)) +
+  theme(plot.title = element_text(colour="#666666", face="bold", size=16, hjust=0)) +
+  theme(axis.title = element_text(colour="#666666", face="bold", size=10)) +
   theme(panel.background = element_blank()) +
   scale_y_continuous(breaks = c(0, 100, 200, 300, 400, 500, 600)) +
   scale_x_continuous(breaks = c(1820, 1840, 1860, 1880, 1900, 1920, 1940, 1960, 1980, 2000, 2020)) +
@@ -133,7 +145,7 @@ cycle_stats %>%
                    yend = cycLength-0.2), size = 1, colour = "grey30") + 
   theme_light() +
   ggtitle("SOLAR CYCLES LENGTH") +
-  labs(x = "DATE (MIDDLE OF CYCLE)", y = "YEARS", colour = "CYCLE #") +
+  labs(x = "DATE (MIDDLE OF CYCLE)", y = "YEARS", colour = "#") +
   theme(plot.title = element_text(colour="#666666", face="bold", size=14, hjust=0)) +
   theme(axis.title = element_text(colour="#666666", face="bold", size=10)) +
   theme(legend.text.align=0.5) +
@@ -156,7 +168,7 @@ cycle_stats %>%
   scale_y_continuous(breaks = c(100, 150, 200, 250, 300, 350, 400, 450, 500)) +
   scale_x_continuous(breaks = c(3250, 3500, 3750, 4000, 4250, 4500, 4750, 5000)) +
   theme(legend.position="right", legend.key.size=unit(0.2,"point")) +
-  guides(colour=guide_legend(ncol=2))
+  guides(colour=guide_legend(ncol=3))
 #Compare the lengths of each solar cycle to cumulative sunspots
 cycle_stats %>%
   filter(cyclnum %in% full_cyc) %>% 
@@ -171,12 +183,12 @@ cycle_stats %>%
   scale_x_continuous(breaks = c(3250, 3500, 3750, 4000, 4250, 4500, 4750, 5000)) +
   scale_y_continuous(labels = scales::comma) +
   theme(legend.position="right", legend.key.size=unit(0.2,"point")) +
-  guides(colour=guide_legend(ncol=2))
+  guides(colour=guide_legend(ncol=3))
 ```
 
 We can see from the previous charts that the most recent sunspot cycle showed the lowest maximum number (~220), was the shortest (~3318 days), and had one of the lowest cummulative sunspot number (~195000) in the dataset. Diving deeper into the individual solar cycles will provide some insight into each cycle profile and development.
 
-```{r Averages, echo=FALSE, message=FALSE, warning=FALSE}
+```{r Averages, echo=FALSE, message=FALSE, warning=FALSE, out.width = '100%', echo=FALSE}
 #The following two plots require some averaged datasets to be created for cumulative sunspots and 90-day moving average
 mavg90 <- silso_ss %>%
   group_by(cycldays) %>%
@@ -197,8 +209,8 @@ silso_ss %>%
   theme_light() +
   ggtitle("SOLAR CYCLE (COMBINED)") +
   labs(x = "DAY FROM CYCLE START", y = "90-DAY MOVING AVERAGE", colour = "CYCLE #") +
-  theme(plot.title = element_text(colour="#666666", face="bold", size=18, hjust=0)) +
-  theme(axis.title = element_text(colour="#666666", face="bold", size=12))  
+  theme(plot.title = element_text(colour="#666666", face="bold", size=14, hjust=0)) +
+  theme(axis.title = element_text(colour="#666666", face="bold", size=10))  
 
 #Comparing all of the cumulative sunspot summations to the smoothed average of the cycles
 silso_ss %>%
@@ -213,14 +225,14 @@ silso_ss %>%
   theme_light() +
   ggtitle("SOLAR CYCLE CUMULATIVE SUMS (COMBINED)") +
   labs(x = "DAY FROM CYCLE START", y = "CUMULATIVE SUNSPOT NUMBER", colour = "CYCLE #") +
-  theme(plot.title = element_text(colour="#666666", face="bold", size=18, hjust=0)) +
-  theme(axis.title = element_text(colour="#666666", face="bold", size=12)) +
+  theme(plot.title = element_text(colour="#666666", face="bold", size=14, hjust=0)) +
+  theme(axis.title = element_text(colour="#666666", face="bold", size=10)) +
   scale_y_continuous(labels = scales::comma)
 ```
 
 These plots are quite busy and overwhelming. Let's unpackage them into each cycle compared to the average by facet plotting.
 
-```{r Facets, message=FALSE, warning=FALSE}
+```{r Facets, message=FALSE, warning=FALSE, out.width = '100%', echo=FALSE}
 #Facet wrapping cycles against 90-day moving avg average
 silso_ss %>%
   filter(cyclnum %in% full_cyc) %>%  
@@ -250,7 +262,7 @@ silso_ss %>%
   theme_light() +
   facet_wrap( ~ cyclnum, ncol = 6) +  
   ggtitle("SOLAR CYCLE COMPARISON") +
-  labs(x = "DAY FROM CYCLE START", y = "CUMULATIVE SUNSPOT NUMBER", colour = "SOLAR CYCLE") +
+  labs(x = "DAY FROM CYCLE START", y = "CUMULATIVE SUNSPOT NUMBER", colour = "CYCLE #") +
   theme(plot.title = element_text(colour="#666666", face="bold", size=16, hjust=0)) +
   theme(axis.title = element_text(colour="#666666", face="bold", size=10)) +
   theme(legend.title = element_text(colour="#666666", face="bold", size=8)) +  
@@ -260,7 +272,7 @@ silso_ss %>%
 
 There are some interpretations to be drawn from the last two facet plots, primarily that solar cycles 7, 14, and 24 share similar profiles, sunspot number peaks, and lengths. Let's zoom in to view a subsection of the 90-Day moving average facet plots to highlight how solar cycles ramp up their activity within the first 1000 days.
 
-```{r ma90 facet, message=FALSE, warning=FALSE}
+```{r ma90 facet, message=FALSE, warning=FALSE, out.width = '100%', echo=FALSE}
 silso_ss %>%
   filter(cyclnum %in% full_cyc) %>%  
   filter(cycldays <= 1000) %>%
