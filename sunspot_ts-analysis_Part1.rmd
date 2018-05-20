@@ -48,14 +48,13 @@ The CVS version is downloaded directly onto the client computer (Daily total sun
 
 ```{r Import Data, message=FALSE, warning=FALSE}
 #This data.frame has been adjusted before import in Excel to identify cycle number value and create cycldays
-silso_ss <- read_csv("C:/Users/carte/OneDrive/Documents/R/data/SN_d_tot_V2.0-edit.csv", na = "")
+silso_ss <- read_csv("SN_d_tot_V2.0-edit.csv", na = "")
 summary(silso_ss)
 ```
 
 ## Data Manipulation, Filtering, and Wrangling
 
-Need to set 'cyclnum' as a factor, create a cumulative summation of sunspot numbers, then add it back as a column into the silso_ss data.frame. We will be plotting this sunspot cumulative sum per cycle later
-cumulative summation of sunspot number can be used as a proxi for total solar activity.
+Need to set 'cyclnum' as a factor, create a cumulative summation of sunspot numbers, then add it back as a column into the silso_ss data.frame. We will be plotting this variable later as cumulative summation of the sunspot number can be used as a proxi for total solar activity.
 
 ```{r Data Manipulation, message=FALSE, warning=FALSE}
 #data.frame manipulation using dplyr
@@ -96,9 +95,11 @@ silso_ss <- mutate(silso_ss, dmavg360 = rollapply(ssnum, 360, mean, fill = NA, n
 datatable(silso_ss)
 ```
 
+The two data.frames that have been created and manipulated [silso_ss and cycle_stats] are now ready to be investigated through plotting.
+
 ## Exploratory Analysis Plotting
 
-Let's plot some exploratory data images.
+Let's plot some exploratory data images. First will be a full timeseries plot with the 360-Day moving average overlay, the second will show the length of each individual solar cycle, and the last two are maximum and cummulative sunspot comparisons per solar cycle.
 
 ```{r Timeseries Plots, message=FALSE, warning=FALSE}
 #Plot the sunspot number, 360-day moving average, cycle number, and complete data GAM trend
@@ -145,10 +146,6 @@ cycle_stats %>%
 cycle_stats %>%
   filter(cyclnum %in% full_cyc) %>% 
     ggplot(aes(x = cycLength_d, y = maxssnum, colour = cyclnum)) +
-      geom_segment(aes(x = cycLength_d, 
-                       xend = cycLength_d, 
-                       y = 0, 
-                       yend = maxssnum), size = 1, colour = "grey30") + 
       geom_point(size = 6) +
   theme_light() +
   ggtitle("SOLAR CYCLE LENGTH VS MAX SUNSPOT NUMBER") +
@@ -164,10 +161,6 @@ cycle_stats %>%
 cycle_stats %>%
   filter(cyclnum %in% full_cyc) %>% 
   ggplot(aes(x = cycLength_d, y = cumssnum, colour = cyclnum)) +
-      geom_segment(aes(x = cycLength_d, 
-                       xend = cycLength_d, 
-                       y = 0, 
-                       yend = cumssnum), size = 1, colour = "grey30") + 
       geom_point(size = 6) +
   theme_light() +
   ggtitle("SOLAR CYCLE LENGTH VS CUMULATIVE SUNSPOTS") +
@@ -181,7 +174,7 @@ cycle_stats %>%
   guides(colour=guide_legend(ncol=2))
 ```
 
-We can see from the previous charts that the most recent sunspot cycle was the weakest (max sunspot number 220) and shortest (~3318 days) in the dataset. Diving deeper into the individual solar cycles will provide some insight into each cycle profile and development.
+We can see from the previous charts that the most recent sunspot cycle showed the lowest maximum number (~220), was the shortest (~3318 days), and had one of the lowest cummulative sunspot number (~195000) in the dataset. Diving deeper into the individual solar cycles will provide some insight into each cycle profile and development.
 
 ```{r Averages, echo=FALSE, message=FALSE, warning=FALSE}
 #The following two plots require some averaged datasets to be created for cumulative sunspots and 90-day moving average
