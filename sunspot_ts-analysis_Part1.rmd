@@ -1,0 +1,292 @@
+---
+title: "Sunspot Analysis [Part1]"
+author: "Carter Edie"
+date: "May 16, 2018"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+GitHub: https://github.com/CarterEdie
+LinkedIn: https://www.linkedin.com/in/i-carter-edie/
+
+## Introduction
+
+The purpose of this three part case study is to use exploratory, descriptive, and predictive statistical techniques to examine a well know time series that has over 200 years of continuous recorded events.
+
+"Sunspots are temporary phenomena on the Sun's photosphere that appear as spots darker than the surrounding areas. They are regions of reduced surface temperature caused by concentrations of magnetic field flux that inhibit convection. Sunspots usually appear in pairs of opposite magnetic polarity.[2] Their number varies according to the approximately 11-year solar cycle. Individual sunspots or groups of sunspots may last anywhere from a few days to a few months, but eventually decay."                                                                         - Wikipedia (https://en.wikipedia.org/wiki/Sunspot)
+
+First, we need to load the basic packages required to read [readxl] and manipulate [tidyverse] the data along with the time series analysis package [zoo].
+
+```{r Library Loading, warning=FALSE}
+library(readxl)
+library(tidyverse)
+library(zoo)
+library(DT)
+```
+
+## Sunspot Data Acquisition
+
+Data was downloaded from the SILSO (Sunspot Index and Longterm Solar Observations) website:
+http://www.sidc.be/silso/datafiles
+
+Data versions availible at SILSO are:
+
+1. Daily total sunspot number [1/1/1818 - now]
+2. Monthly mean total sunspot number [1/1749 - now]
+3. 13-month smoothed monthly total sunspot number [1/1749 - now]
+4. Yearly mean total sunspot number [1700 - now]
+
+The CVS version is downloaded directly onto the client computer (Daily total sunspot number) and for this project we will use a modified version of Daily total sunspot number manipulated in Excel (SN_d_tot_V2.0-edit.csv).
+
+```{r Import Data, message=FALSE, warning=FALSE}
+#This data.frame has been adjusted before import in Excel to identify cycle number value and create cycldays
+silso_ss <- read_csv("C:/Users/carte/OneDrive/Documents/R/data/SN_d_tot_V2.0-edit.csv", na = "")
+summary(silso_ss)
+```
+
+## Data Manipulation, Filtering, and Wrangling
+
+Need to set 'cyclnum' as a factor, create a cumulative summation of sunspot numbers, then add it back as a column into the silso_ss data.frame. We will be plotting this sunspot cumulative sum per cycle later
+cumulative summation of sunspot number can be used as a proxi for total solar activity.
+
+```{r Data Manipulation, message=FALSE, warning=FALSE}
+#data.frame manipulation using dplyr
+silso_ss$cyclnum <- as.factor(silso_ss$cyclnum)
+print(levels((silso_ss$cyclnum)))
+silso_ss_csum <- silso_ss %>%
+  group_by(cyclnum, cycldays) %>%
+  summarise(ssnum = sum(ssnum, na.rm = TRUE)) %>%
+  mutate(csum = cumsum(ssnum))
+silso_ss$csum <- silso_ss_csum$csum
+```
+
+Next, we can create a new data.frame called 'cycle_stats' using dplyr and summeraize again to find 'cycLength', 'middle', and maximum values for ssnum and total cumulative sunspots per cycle, interactively viewing cycle_stats with the [DT] package.
+
+```{r Summary data.frame, message=FALSE, warning=FALSE}
+#data.frame creation using dplyr, group_by, and summarize
+cycle_stats <- silso_ss %>%
+  group_by(cyclnum) %>%
+  summarise(
+    cycLength = max(foydate) - min(foydate),
+    cycLength_d = max(cycldays, na.rm = TRUE),
+    middle = mean(foydate),
+    maxssnum = max(ssnum, na.rm = TRUE),
+    cumssnum = max(csum))
+datatable(cycle_stats)
+#worthwhile to glimse at the average cycle length as well (in days)
+mean(cycle_stats$cycLength_d)
+```
+
+Now we can calculate different rolling averages using the "zoo" package. NA values are excluded from the calculations by coding 'fill = NA' and 'align = c("right")' ensures averaging of backwards looking time values. 'dmavg90' represents the short frequency (~3 months) and 'dmavg360' is for the longer-frequency (~1 year), viewing the complete silso_ss data.frame interactively using the [DT] package.
+
+```{r Mutate 90-day and 360-day Moving Averages, message=FALSE, warning=FALSE}
+#data.frame mutation with dplyr and zoo for rolling averages
+silso_ss <- mutate(silso_ss, dmavg90 = rollapply(ssnum, 90, mean, fill = NA, na.rm = TRUE,
+                                                align = c("right")))
+silso_ss <- mutate(silso_ss, dmavg360 = rollapply(ssnum, 360, mean, fill = NA, na.rm = TRUE,
+                                                align = c("right")))
+datatable(silso_ss)
+```
+
+## Exploratory Analysis Plotting
+
+Let's plot some exploratory data images.
+
+```{r Timeseries Plots, message=FALSE, warning=FALSE}
+#Plot the sunspot number, 360-day moving average, cycle number, and complete data GAM trend
+ggplot(data = filter(silso_ss, year >= "1818"), mapping = aes(x = foydate, y = ssnum)) + 
+  geom_line(colour = 'slategray1', na.rm = TRUE) +
+  geom_line(mapping = aes(x = foydate, y = dmavg360),colour = "#FB6A4A", 
+            na.rm = TRUE) +  
+  geom_smooth(colour = "#2171B5") +  
+  theme_light() + 
+  ggtitle("SOLAR CYCLE ACTIVITY") +
+  labs(x = "YEAR", y = "SUNSPOT NUMBER") +
+  theme(plot.title = element_text(colour="#666666", face="bold", size=18, hjust=0)) +
+  theme(axis.title = element_text(colour="#666666", face="bold", size=12)) +
+  theme(panel.background = element_blank()) +
+  scale_y_continuous(breaks = c(0, 100, 200, 300, 400, 500, 600)) +
+  scale_x_continuous(breaks = c(1820, 1840, 1860, 1880, 1900, 1920, 1940, 1960, 1980, 2000, 2020)) +
+  annotate("text", x=cycle_stats$middle, y =21.5, label= cycle_stats$cyclnum, size = 4, 
+           colour = "gray20")
+
+#create a list that excludes all 'partial' cycles (cycle 6 only)
+full_cyc <- c(7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24)
+
+#Compare the lengths of each solar cycle (lollipop plot)
+cycle_stats %>%
+  filter(cyclnum %in% full_cyc) %>% 
+  ggplot(aes(x = middle, y = cycLength, colour = cyclnum)) +
+  geom_point(size = 6) +
+  geom_segment(aes(x = middle, 
+                   xend = middle, 
+                   y = 0, 
+                   yend = cycLength-0.2), size = 1, colour = "grey30") + 
+  theme_light() +
+  ggtitle("SOLAR CYCLES LENGTH") +
+  labs(x = "DATE (MIDDLE OF CYCLE)", y = "YEARS", colour = "CYCLE #") +
+  theme(plot.title = element_text(colour="#666666", face="bold", size=14, hjust=0)) +
+  theme(axis.title = element_text(colour="#666666", face="bold", size=10)) +
+  theme(legend.text.align=0.5) +
+  scale_y_continuous(breaks = c(0, 2, 4, 6, 8, 10, 12, 14)) +
+  scale_x_reverse(breaks = c(1820, 1840, 1860, 1880, 1900, 1920, 1940, 1960, 1980, 2000, 2020)) +
+  theme(legend.position="bottom", legend.key.size=unit(0.2,"point")) +
+  guides(colour=guide_legend(nrow=1)) +  
+  coord_flip()
+#Compare the lengths of each solar cycle to max ssnum
+cycle_stats %>%
+  filter(cyclnum %in% full_cyc) %>% 
+    ggplot(aes(x = cycLength_d, y = maxssnum, colour = cyclnum)) +
+      geom_segment(aes(x = cycLength_d, 
+                       xend = cycLength_d, 
+                       y = 0, 
+                       yend = maxssnum), size = 1, colour = "grey30") + 
+      geom_point(size = 6) +
+  theme_light() +
+  ggtitle("SOLAR CYCLE LENGTH VS MAX SUNSPOT NUMBER") +
+  labs(x = "DAYS FROM START", y = "MAXIMUM SSNUM", colour = "CYCLE #") +
+  theme(plot.title = element_text(colour="#666666", face="bold", size=14, hjust=0)) +
+  theme(axis.title = element_text(colour="#666666", face="bold", size=10)) +
+  theme(legend.text.align=0.5) +
+  scale_y_continuous(breaks = c(100, 150, 200, 250, 300, 350, 400, 450, 500)) +
+  scale_x_continuous(breaks = c(3250, 3500, 3750, 4000, 4250, 4500, 4750, 5000)) +
+  theme(legend.position="right", legend.key.size=unit(0.2,"point")) +
+  guides(colour=guide_legend(ncol=2))
+#Compare the lengths of each solar cycle to cumulative sunspots
+cycle_stats %>%
+  filter(cyclnum %in% full_cyc) %>% 
+  ggplot(aes(x = cycLength_d, y = cumssnum, colour = cyclnum)) +
+      geom_segment(aes(x = cycLength_d, 
+                       xend = cycLength_d, 
+                       y = 0, 
+                       yend = cumssnum), size = 1, colour = "grey30") + 
+      geom_point(size = 6) +
+  theme_light() +
+  ggtitle("SOLAR CYCLE LENGTH VS CUMULATIVE SUNSPOTS") +
+  labs(x = "DAYS FROM START", y = "CUMULATIVE SSNUM", colour = "CYCLE #") +
+  theme(plot.title = element_text(colour="#666666", face="bold", size=14, hjust=0)) +
+  theme(axis.title = element_text(colour="#666666", face="bold", size=10)) +
+  theme(legend.text.align=0.5) +
+  scale_x_continuous(breaks = c(3250, 3500, 3750, 4000, 4250, 4500, 4750, 5000)) +
+  scale_y_continuous(labels = scales::comma) +
+  theme(legend.position="right", legend.key.size=unit(0.2,"point")) +
+  guides(colour=guide_legend(ncol=2))
+```
+
+We can see from the previous charts that the most recent sunspot cycle was the weakest (max sunspot number 220) and shortest (~3318 days) in the dataset. Diving deeper into the individual solar cycles will provide some insight into each cycle profile and development.
+
+```{r Averages, echo=FALSE, message=FALSE, warning=FALSE}
+#The following two plots require some averaged datasets to be created for cumulative sunspots and 90-day moving average
+mavg90 <- silso_ss %>%
+  group_by(cycldays) %>%
+  summarise(ma90_avg = mean(dmavg90, na.rm = TRUE))
+
+avgcsum <- silso_ss %>%
+  group_by(cycldays) %>%
+  summarise(avg_csum = mean(csum, na.rm = TRUE))
+
+#Comparing all of the 90-day moving averages to the GAM smoothed average of the cycles (excluding Cycle 6 again)
+silso_ss %>%
+  filter(cyclnum %in% full_cyc) %>%  
+  group_by(cycldays, cyclnum) %>%
+  ggplot(aes(x=cycldays, y=dmavg90, colour=cyclnum)) +
+  geom_line() +
+  geom_smooth(data = mavg90,
+            aes(x=cycldays, y=ma90_avg), colour="black") +
+  theme_light() +
+  ggtitle("SOLAR CYCLE (COMBINED)") +
+  labs(x = "DAY FROM CYCLE START", y = "90-DAY MOVING AVERAGE", colour = "CYCLE #") +
+  theme(plot.title = element_text(colour="#666666", face="bold", size=18, hjust=0)) +
+  theme(axis.title = element_text(colour="#666666", face="bold", size=12))  
+
+#Comparing all of the cumulative sunspot summations to the smoothed average of the cycles
+silso_ss %>%
+  filter(cyclnum %in% full_cyc) %>%
+  group_by(cyclnum, cycldays) %>%
+  summarise(ssnum = sum(ssnum, na.rm = TRUE)) %>%
+  mutate(csum = cumsum(ssnum)) %>%
+  ggplot(aes(x=cycldays, y=csum, colour=cyclnum)) +
+  geom_line() +
+  geom_smooth(data = filter(avgcsum, cycldays <= 4300),
+            aes(x=cycldays, y=avg_csum), colour="gray15", span = 1000, se = FALSE) +  
+  theme_light() +
+  ggtitle("SOLAR CYCLE CUMULATIVE SUMS (COMBINED)") +
+  labs(x = "DAY FROM CYCLE START", y = "CUMULATIVE SUNSPOT NUMBER", colour = "CYCLE #") +
+  theme(plot.title = element_text(colour="#666666", face="bold", size=18, hjust=0)) +
+  theme(axis.title = element_text(colour="#666666", face="bold", size=12)) +
+  scale_y_continuous(labels = scales::comma)
+```
+
+These plots are quite busy and overwhelming. Let's unpackage them into each cycle compared to the average by facet plotting.
+
+```{r Facets, message=FALSE, warning=FALSE}
+#Facet wrapping cycles against 90-day moving avg average
+silso_ss %>%
+  filter(cyclnum %in% full_cyc) %>%  
+  group_by(cycldays, cyclnum) %>%
+  ggplot(aes(x=cycldays, y=dmavg90, colour=cyclnum)) +
+  geom_line() +
+  geom_smooth(data = mavg90,
+              aes(x=cycldays, y=ma90_avg), colour="black") +
+  theme_light() +
+  facet_wrap( ~ cyclnum, ncol = 6) +
+  ggtitle("SOLAR CYCLE COMPARISON") +
+  labs(x = "DAY FROM CYCLE START", y = "90-DAY MOVING AVERAGE", colour = "CYCLE #") +
+  theme(plot.title = element_text(colour="#666666", face="bold", size=16, hjust=0)) +
+  theme(axis.title = element_text(colour="#666666", face="bold", size=10)) +
+  theme(legend.title = element_text(colour="#666666", face="bold", size=8)) +  
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+#Facet wrapping cycles against cumulative average
+silso_ss %>%
+  filter(cyclnum %in% full_cyc) %>%    
+  group_by(cyclnum, cycldays) %>%
+  summarise(ssnum = sum(ssnum, na.rm = TRUE)) %>%
+  mutate(csum = cumsum(ssnum)) %>%
+  ggplot(aes(x=cycldays, y=csum, colour=cyclnum)) +
+  geom_line() +
+  geom_smooth(data = filter(avgcsum, cycldays < 4300),
+              aes(x=cycldays, y=avg_csum), colour="black", span = 1000, se = FALSE) +  
+  theme_light() +
+  facet_wrap( ~ cyclnum, ncol = 6) +  
+  ggtitle("SOLAR CYCLE COMPARISON") +
+  labs(x = "DAY FROM CYCLE START", y = "CUMULATIVE SUNSPOT NUMBER", colour = "SOLAR CYCLE") +
+  theme(plot.title = element_text(colour="#666666", face="bold", size=16, hjust=0)) +
+  theme(axis.title = element_text(colour="#666666", face="bold", size=10)) +
+  theme(legend.title = element_text(colour="#666666", face="bold", size=8)) +  
+  scale_y_continuous(labels = scales::comma) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+There are some interpretations to be drawn from the last two facet plots, primarily that solar cycles 7, 14, and 24 share similar profiles, sunspot number peaks, and lengths. Let's zoom in to view a subsection of the 90-Day moving average facet plots to highlight how solar cycles ramp up their activity within the first 1000 days.
+
+```{r ma90 facet, message=FALSE, warning=FALSE}
+silso_ss %>%
+  filter(cyclnum %in% full_cyc) %>%  
+  filter(cycldays <= 1000) %>%
+  group_by(cycldays, cyclnum) %>%
+  ggplot(aes(x=cycldays, y=dmavg90, colour=cyclnum)) +
+  geom_line() +
+  geom_smooth(data = filter(mavg90, cycldays <= 1000),
+              aes(x=cycldays, y=ma90_avg), colour="black") +
+  theme_light() +
+  facet_wrap( ~ cyclnum, ncol = 6) +
+  ggtitle("SOLAR CYCLE COMPARISON (FIRST 1000 DAYS)") +
+  labs(x = "DAY FROM CYCLE START", y = "90-DAY MOVING AVERAGE", colour = "CYCLE #") +
+  theme(plot.title = element_text(colour="#666666", face="bold", size=16, hjust=0)) +
+  theme(axis.title = element_text(colour="#666666", face="bold", size=10)) +
+  theme(legend.title = element_text(colour="#666666", face="bold", size=8)) +  
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+## Wrapping Up
+
+We'll examine closer how the initial sunspot volatility might be able to help us in our forecasting attempts along with some common statistical forecasting techniques in Part 2.
+
